@@ -173,7 +173,7 @@ class Frame(object):
         Frame.last_kps, Frame.last_des = self.now_kps, self.now_des
         if self.idx == 1:
             self.now_pose = np.eye(4)
-            point4d = [[0, 0, 0, 1]]
+            points4d = [[0, 0, 0, 1]]
         else:
             match_kps = Frame.match_points(self)
             # 拟合本质矩阵
@@ -194,7 +194,7 @@ class Frame(object):
             points4d = points4d[good_pt4d]
             # TODO: g2o 后端优化
             Frame.draw_points(self)
-            mapp.add_observation(self.now_pose, points4d)  # 将当前的 pose 和点云放入地图中
+        mapp.add_observation(self.now_pose, points4d)  # 将当前的 pose 和点云放入地图中
         # 将当前帧的pose传递给下一帧
         Frame.last_pose = frame.now_pose
         return frame
