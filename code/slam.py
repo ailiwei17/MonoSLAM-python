@@ -2,17 +2,17 @@ import cv2
 import pangolin
 import numpy as np
 import OpenGL.GL as gl
-
-from multiprocessing import Process, Queue
 from skimage.measure import ransac
 from skimage.transform import EssentialMatrixTransform
 
+from multiprocessing import Process, Queue
 
-class Map(object):
+# 构建地图，显示角点的点云和相机的位姿
+class Map:
     def __init__(self, W, H):
-        self.width = W
+        self.width  = W
         self.Height = H
-        self.poses = []
+        self.poses  = []
         self.points = []
         self.state = None
         self.q = Queue()
@@ -31,14 +31,14 @@ class Map(object):
         gl.glEnable(gl.GL_DEPTH_TEST)
 
         self.scam = pangolin.OpenGlRenderState(
-            pangolin.ProjectionMatrix(self.width, self.Height, 420, 420, self.width // 2, self.Height // 2, 0.2, 1000),
+            pangolin.ProjectionMatrix(self.width, self.Height, 420, 420, self.width//2, self.Height//2, 0.2, 1000),
             pangolin.ModelViewLookAt(0, -10, -8,
-                                     0, 0, 0,
-                                     0, -1, 0))
+                                     0,   0,  0,
+                                     0,  -1,  0))
         self.handler = pangolin.Handler3D(self.scam)
         # Create Interactive View in window
         self.dcam = pangolin.CreateDisplay()
-        self.dcam.SetBounds(0.0, 1.0, 0.0, 1.0, -self.width / self.Height)
+        self.dcam.SetBounds(0.0, 1.0, 0.0, 1.0, -self.width/self.Height)
         self.dcam.SetHandler(self.handler)
 
     def viewer_thread(self, q):
@@ -90,10 +90,10 @@ class Frame(object):
     def extract_points(self):
         """提取角点"""
         orb = cv2.ORB_create()
-        self.image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        pts = cv2.goodFeaturesToTrack(self.image, 3000, qualityLevel=0.01, minDistance=3)
+        image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        pts = cv2.goodFeaturesToTrack(image, 3000, qualityLevel=0.01, minDistance=3)
         kps = [cv2.KeyPoint(x=pt[0][0], y=pt[0][1], _size=20) for pt in pts]
-        kps, des = orb.compute(self.image, kps)
+        kps, des = orb.compute(image, kps)
         kps = np.array([(kp.pt[0], kp.pt[1]) for kp in kps])
         return kps, des
 
@@ -118,26 +118,6 @@ class Frame(object):
         self.last_kps = self.last_kps[idx2]
         return match_kps
 
-    def fit_essential_matrix(self, match_kps):
-        """使用随机采样一致进行去噪"""
-        global K
-        match_kps = np.array(match_kps)
-
-        # 使用相机内参对角点坐标归一化
-        self.norm_now_kps = normalize(K, match_kps[:, 0])
-        self.norm_last_kps = normalize(K, match_kps[:, 1])
-
-        # 求解本质矩阵和内点数据
-        model, inliers = ransac((self.norm_last_kps, self.norm_now_kps),
-                                EssentialMatrixTransform,
-                                min_samples=8,
-                                residual_threshold=0.005,
-                                max_trials=200)
-
-        self.now_kps = self.now_kps[inliers]
-        self.last_kps = self.last_kps[inliers]
-        return model.params
-
     def triangulate(self):
         pose1 = np.linalg.inv(self.last_pose)  # 从世界坐标系变换到相机坐标系的位姿, 因此取逆
         pose2 = np.linalg.inv(self.now_pose)
@@ -159,6 +139,26 @@ class Frame(object):
         points4d /= points4d[:, 3:]  # 归一化变换成齐次坐标 [x, y, z, 1]
         return points4d
 
+    def fit_essential_matrix(self, match_kps):
+        global K
+        match_kps = np.array(match_kps)
+
+        # 使用相机内参对角点坐标归一化
+        self.norm_now_kps = normalize(K, match_kps[:, 0])
+        self.norm_last_kps = normalize(K, match_kps[:, 1])
+
+        # 求解本质矩阵和内点数据
+        model, inliers = ransac((self.norm_last_kps, self.norm_now_kps),
+                                EssentialMatrixTransform,
+                                min_samples=8,
+                                residual_threshold=0.005,
+                                max_trials=200)
+
+        self.now_kps = self.now_kps[inliers]
+        self.last_kps = self.last_kps[inliers]
+
+        return model.params
+
     def draw_points(self):
         for kp1, kp2 in zip(self.now_kps, self.last_kps):
             u1, v1 = int(kp1[0]), int(kp1[1])
@@ -170,7 +170,7 @@ class Frame(object):
     def process_frame(self):
         """处理图像"""
         self.now_kps, self.now_des = Frame.extract_points(self)
-        Frame.last_kps, Frame.last_des = self.now_kps, self.now_des
+        last_kps, last_des = self.now_kps, self.now_des
         if self.idx == 1:
             self.now_pose = np.eye(4)
             points4d = [[0, 0, 0, 1]]
@@ -182,10 +182,9 @@ class Frame(object):
             print(essential_matrix)
             # 利用本质矩阵分解出相机的位姿
             _, R, t, _ = cv2.recoverPose(essential_matrix, self.norm_now_kps, self.norm_last_kps)
-            t = t.flatten()
             Rt = np.eye(4)
             Rt[:3, :3] = R
-            Rt[:3, 3] = t
+            Rt[:3, 3] = t.flatten()
             # 计算当前帧相当于上一帧的位姿变化
             self.now_pose = np.dot(Rt, self.last_pose)
             # 三角测量得到空间位置
@@ -194,11 +193,11 @@ class Frame(object):
             points4d = points4d[good_pt4d]
             # TODO: g2o 后端优化
             Frame.draw_points(self)
+
         mapp.add_observation(self.now_pose, points4d)  # 将当前的 pose 和点云放入地图中
         # 将当前帧的pose传递给下一帧
-        Frame.last_pose = frame.now_pose
-        return frame
-
+        last_pose = self.now_pose
+        return last_kps, last_des, last_pose
 
 def check_points(points4d):
     # 判断3D点是否在两个摄像头前方
@@ -226,14 +225,17 @@ if __name__ == "__main__":
     F = 270
     K = np.array([[F, 0, W // 2], [0, F, H // 2], [0, 0, 1]])
     mapp = Map(1024, 768)
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture("road.mp4")
     while cap.isOpened():
         ret, frame = cap.read()
         frame = Frame(frame)
+
         if ret:
-            frame = frame.process_frame()
+            Frame.last_kps, Frame.last_des, Frame.last_pose = frame.process_frame()
         else:
             break
+
         cv2.imshow("slam", frame.image)
         mapp.display()
-        if cv2.waitKey(30) & 0xFF == ord('q'): break
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
