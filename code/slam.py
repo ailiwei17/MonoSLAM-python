@@ -1,75 +1,11 @@
 import cv2
-import pangolin
+
 import numpy as np
-import OpenGL.GL as gl
+
 from skimage.measure import ransac
 from skimage.transform import EssentialMatrixTransform
-
-from multiprocessing import Process, Queue
-
-# 构建地图，显示角点的点云和相机的位姿
-class Map:
-    def __init__(self, W, H):
-        self.width  = W
-        self.Height = H
-        self.poses  = []
-        self.points = []
-        self.state = None
-        self.q = Queue()
-
-        p = Process(target=self.viewer_thread, args=(self.q,))
-        p.daemon = True
-        p.start()
-
-    def add_observation(self, pose, points):
-        self.poses.append(pose)
-        for point in points:
-            self.points.append(point)
-
-    def viewer_init(self):
-        pangolin.CreateWindowAndBind('Main', self.width, self.Height)
-        gl.glEnable(gl.GL_DEPTH_TEST)
-
-        self.scam = pangolin.OpenGlRenderState(
-            pangolin.ProjectionMatrix(self.width, self.Height, 420, 420, self.width//2, self.Height//2, 0.2, 1000),
-            pangolin.ModelViewLookAt(0, -10, -8,
-                                     0,   0,  0,
-                                     0,  -1,  0))
-        self.handler = pangolin.Handler3D(self.scam)
-        # Create Interactive View in window
-        self.dcam = pangolin.CreateDisplay()
-        self.dcam.SetBounds(0.0, 1.0, 0.0, 1.0, -self.width/self.Height)
-        self.dcam.SetHandler(self.handler)
-
-    def viewer_thread(self, q):
-        self.viewer_init()
-        while True:
-            self.viewer_refresh(q)
-
-    def viewer_refresh(self, q):
-        if self.state is None or not q.empty():
-            self.state = q.get()
-
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-        gl.glClearColor(1.0, 1.0, 1.0, 1.0)
-        self.dcam.Activate(self.scam)
-
-        # draw poses
-        gl.glColor3f(0.0, 1.0, 0.0)
-        pangolin.DrawCameras(self.state[0])
-
-        # draw keypoints
-        gl.glPointSize(2)
-        gl.glColor3f(1.0, 0.0, 0.0)
-        pangolin.DrawPoints(self.state[1])
-
-        pangolin.FinishFrame()
-
-    def display(self):
-        poses = np.array(self.poses)
-        points = np.array(self.points)
-        self.q.put((poses, points))
-
+import mapping
+import optimize_g2o
 
 class Frame(object):
     idx = 0
@@ -78,7 +14,6 @@ class Frame(object):
     def __init__(self, image):
         """把上一帧的信息传递给下一帧"""
         Frame.idx += 1
-
         self.image = image
         self.idx = Frame.idx
         self.now_kps = Frame.last_kps
@@ -86,6 +21,7 @@ class Frame(object):
         self.now_pose = Frame.last_pose
         self.norm_now_kps = None
         self.norm_last_kps = None
+        self.Rt = np.eye(4)
 
     def extract_points(self):
         """提取角点"""
@@ -182,16 +118,17 @@ class Frame(object):
             print(essential_matrix)
             # 利用本质矩阵分解出相机的位姿
             _, R, t, _ = cv2.recoverPose(essential_matrix, self.norm_now_kps, self.norm_last_kps)
-            Rt = np.eye(4)
-            Rt[:3, :3] = R
-            Rt[:3, 3] = t.flatten()
+            self.Rt[:3, :3] = R
+            self.Rt[:3, 3] = t.flatten()
             # 计算当前帧相当于上一帧的位姿变化
-            self.now_pose = np.dot(Rt, self.last_pose)
+            self.now_pose = np.dot(self.Rt, self.last_pose)
             # 三角测量得到空间位置
             points4d = Frame.triangulate(self)
+            if self.idx > 5:
+                self.Rt = optimize_g2o.optimize(self, points4d, K)
+            self.now_pose = np.dot(self.Rt, self.last_pose)
             good_pt4d = check_points(points4d)
             points4d = points4d[good_pt4d]
-            # TODO: g2o 后端优化
             Frame.draw_points(self)
 
         mapp.add_observation(self.now_pose, points4d)  # 将当前的 pose 和点云放入地图中
@@ -202,7 +139,7 @@ class Frame(object):
 def check_points(points4d):
     # 判断3D点是否在两个摄像头前方
     good_points = points4d[:, 2] > 0
-    # TODO: parallax、重投投影误差筛选等等 ....
+    # TODO: parallax、BA等等 ....
     return good_points
 
 
@@ -224,8 +161,8 @@ if __name__ == "__main__":
     W, H = 960, 540
     F = 270
     K = np.array([[F, 0, W // 2], [0, F, H // 2], [0, 0, 1]])
-    mapp = Map(1024, 768)
-    cap = cv2.VideoCapture("road.mp4")
+    mapp = mapping.Map(1024, 768)
+    cap = cv2.VideoCapture("test.mp4")
     while cap.isOpened():
         ret, frame = cap.read()
         frame = Frame(frame)
