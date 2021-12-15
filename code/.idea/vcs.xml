@@ -2,6 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/.." vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/fire-smoke-detect-yolov4" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/pangolin" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/pangolin_python" vcs="Git" />
   </component>

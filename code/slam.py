@@ -9,13 +9,13 @@ if __name__ == "__main__":
     F = 270
     K = np.array([[F, 0, W // 2], [0, F, H // 2], [0, 0, 1]])
     mapp = mapping.Map(1024, 768)
-    cap = cv2.VideoCapture("road.mp4")
+    cap = cv2.VideoCapture("test.mp4")
     while cap.isOpened():
         ret, frame = cap.read()
         frame = Frame.Frame(frame, K)
 
         if ret:
-            Frame.Frame.last_kps, Frame.Frame.last_des, Frame.Frame.last_pose = frame.process_frame(mapp)
+            frame = frame.process_frame(mapp)
         else:
             break
 
