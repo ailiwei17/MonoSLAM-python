@@ -10,6 +10,7 @@ class Map:
         self.Height = H
         self.poses = []
         self.points = []
+        self.colors = []
         self.state = None
         self.q = Queue()
 
@@ -25,7 +26,6 @@ class Map:
     def viewer_init(self):
         pangolin.CreateWindowAndBind('Main', self.width, self.Height)
         gl.glEnable(gl.GL_DEPTH_TEST)
-
         self.scam = pangolin.OpenGlRenderState(
             pangolin.ProjectionMatrix(self.width, self.Height, 420, 420, self.width//2, self.Height//2, 0.2, 1000),
             pangolin.ModelViewLookAt(0, -10, -8,
@@ -56,9 +56,13 @@ class Map:
 
         # draw keypoints
         gl.glPointSize(2)
-        gl.glColor3f(1.0, 0.0, 0.0)
-        pangolin.DrawPoints(self.state[1])
-
+        for i, point in enumerate(self.state[1]):
+            color_pb = self.state[1][i][3]
+            b = int(color_pb/65536) * 2
+            g = int(color_pb // 65536 / 256) * 2
+            r = int(color_pb // 65536 // 256) * 2
+            gl.glColor3f(r, g, b)
+            pangolin.DrawPoints(self.state[1][i:i+1])
         pangolin.FinishFrame()
 
     def display(self):
