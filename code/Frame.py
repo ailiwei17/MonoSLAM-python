@@ -26,7 +26,7 @@ class Frame(object):
         """提取角点"""
         orb = cv2.ORB_create()
         image = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        pts = cv2.goodFeaturesToTrack(image, 3000, qualityLevel=0.01, minDistance=3)
+        pts = cv2.goodFeaturesToTrack(image, 3000, qualityLevel=0.01, minDistance=0.1)
         kps = [cv2.KeyPoint(x=pt[0][0], y=pt[0][1], _size=20) for pt in pts]
         kps, des = orb.compute(image, kps)
         kps = np.array([(kp.pt[0], kp.pt[1]) for kp in kps])
@@ -126,16 +126,16 @@ class Frame(object):
             points4d = points4d[good_pt4d]
             self.last_kps = self.last_kps[good_pt4d]
             self.now_kps = self.now_kps[good_pt4d]
-            # TODO 没有box的时候
             if self.yolo:
                 points4d = points4d.tolist()
                 img, boxes, colors = detect(self.image)
-                for i in range(len(boxes[0])):
-                    (x, y) = (boxes[i][0] / 608 * self.image.shape[1], boxes[i][1] / 608 * self.image.shape[0])
-                    (w, h) = (boxes[i][2] / 608 * self.image.shape[1], boxes[i][3] / 608 * self.image.shape[0])
-                    for (j, point4d) in enumerate(points4d):
-                        if (x - h < point4d[0] < x + h) & (y - w < point4d[1] < y + w):
-                            point4d[3] = 65536 * colors[i][2] + 256 * colors[i][1] + colors[i][0]
+                if boxes != 0:
+                    for i in range(len(boxes[0])):
+                        (x, y) = (boxes[i][0] / 608 * self.image.shape[1], boxes[i][1] / 608 * self.image.shape[0])
+                        (w, h) = (boxes[i][2] / 608 * self.image.shape[1], boxes[i][3] / 608 * self.image.shape[0])
+                        for (j, point4d) in enumerate(points4d):
+                            if (x - h < point4d[0] < x + h) & (y - w < point4d[1] < y + w):
+                                point4d[3] = 65536 * colors[i][2] + 256 * colors[i][1] + colors[i][0]
                 img = cv2.resize(img, (self.image.shape[1], self.image.shape[0]))
                 cv2.imshow("test", img)
             Frame.draw_points(self)

@@ -57,11 +57,14 @@ class Map:
         # draw keypoints
         gl.glPointSize(2)
         for i, point in enumerate(self.state[1]):
-            color_pb = self.state[1][i][3]
-            b = int(color_pb/65536) * 2
-            g = int(color_pb // 65536 / 256) * 2
-            r = int(color_pb // 65536 // 256) * 2
-            gl.glColor3f(r, g, b)
+            if point[3] == 1:
+                gl.glColor3f(1.0, 0.0, 1.0)
+            else:
+                color_pb = point[3]
+                b = int(color_pb/65536/ 255)
+                g = int(color_pb // 65536 / 256 / 255)
+                r = int(color_pb // 65536 // 256 / 255)
+                gl.glColor3f(r, g, b)
             pangolin.DrawPoints(self.state[1][i:i+1])
         pangolin.FinishFrame()
 

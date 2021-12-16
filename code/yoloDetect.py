@@ -63,6 +63,8 @@ def postprocess(frame, outs):
                         0.8, color, 1, lineType=cv2.LINE_AA)
             colors.append(color)
         return frame, boxes, colors
+    else:
+        return frame, 0, 0
 
 
 def detect(img):
