@@ -6,7 +6,7 @@ LABELS = open("coco.names").read().strip().split("\n")
 np.random.seed(666)
 COLORS = np.random.randint(0, 255, size=(len(LABELS), 3), dtype="uint8")
 
-confThreshold = 0.5
+confThreshold = 0.7
 
 net = dnn.readNetFromDarknet("yolov3.cfg", "yolov3.weights")
 
@@ -27,7 +27,6 @@ def postprocess(frame, outs):
     boxes = []
     colors = []
     for out in outs:
-        print("out size", out.shape)
         for detection in out:
             # 不同的数据集训练下的 label 数量不一样，yolov3 是在 coco 数据集上训练的，所以支持 80 种类别，输出层代表多个 box 的信息
             scores = detection[5:]
@@ -48,7 +47,7 @@ def postprocess(frame, outs):
 
     # 利用 NMS 算法消除多余的框，有些框会叠加在一块，留下置信度最高的框
     indices = cv2.dnn.NMSBoxes(boxes, confidences, confThreshold, 0.5)
-
+    boxes_nms = []
     if len(indices) > 0:
         # 循环画出保存的边框
         for i in indices.flatten():
@@ -62,9 +61,10 @@ def postprocess(frame, outs):
             cv2.putText(frame, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,
                         0.8, color, 1, lineType=cv2.LINE_AA)
             colors.append(color)
-        return frame, boxes, colors
+            boxes_nms.append([boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3]])
+        return frame, boxes_nms, colors
     else:
-        return frame, 0, 0
+        return frame, None, None
 
 
 def detect(img):
