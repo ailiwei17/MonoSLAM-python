@@ -61,9 +61,9 @@ class Map:
                 gl.glColor3f(1.0, 0.0, 1.0)
             else:
                 color_pb = point[3]
-                b = int(color_pb/65536/ 255)
-                g = int(color_pb // 65536 / 256 / 255)
-                r = int(color_pb // 65536 // 256 / 255)
+                b = color_pb/65536.0
+                g = color_pb // 65536.0 / 256.0
+                r = color_pb // 65536.0 // 256.0
                 gl.glColor3f(r, g, b)
             pangolin.DrawPoints(self.state[1][i:i+1])
         pangolin.FinishFrame()

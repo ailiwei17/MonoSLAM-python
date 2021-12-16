@@ -129,6 +129,7 @@ class Frame(object):
             if self.yolo:
                 points4d = points4d.tolist()
                 img, boxes, colors = detect(self.image)
+                colors.extend(colors[0:(len(boxes) > len(colors))]) if len(boxes) != len(colors) else 0
                 if boxes != 0:
                     for i in range(len(boxes[0])):
                         (x, y) = (boxes[i][0] / 608 * self.image.shape[1], boxes[i][1] / 608 * self.image.shape[0])
